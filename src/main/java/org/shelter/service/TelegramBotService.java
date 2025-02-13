@@ -5,13 +5,10 @@ import com.pengrad.telegrambot.UpdatesListener;
 import com.pengrad.telegrambot.model.PhotoSize;
 import com.pengrad.telegrambot.model.Update;
 import com.pengrad.telegrambot.request.SendMessage;
-import com.pengrad.telegrambot.request.SendPhoto;
 import org.shelter.enums.BotCommand;
 import org.shelter.enums.Role;
 import org.shelter.enums.UserStage;
-import org.shelter.model.Animal;
 import org.shelter.model.DailyReport;
-import org.shelter.model.Shelter;
 import org.shelter.model.User;
 import org.shelter.repository.AnimalRepository;
 import org.shelter.repository.ShelterRepository;
@@ -28,7 +25,6 @@ import org.telegram.telegrambots.bots.DefaultBotOptions;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Сервис для работы с Telegram-ботом с использованием библиотеки Pengrad.
@@ -48,6 +44,7 @@ public class TelegramBotService implements UpdatesListener {
     private String botUsername;
 
     private TelegramBot telegramBot;
+    private MessageService messageService;
 
     // Зависимости
     private final UserRepository userRepository;
@@ -55,6 +52,8 @@ public class TelegramBotService implements UpdatesListener {
     private final AnimalRepository animalRepository;
     private final UserStateService userStateService;
     private final ReportService reportService;
+    private final ShelterConsultService shelterConsultService;
+    private final AdoptionConsultService adoptionConsultService;
 
     // Пример volunteerChatId
     private final String volunteerChatId = "@Volunteer";
@@ -68,20 +67,28 @@ public class TelegramBotService implements UpdatesListener {
      * @param animalRepository  репозиторий для животных
      * @param userStateService  сервис управления состоянием пользователя
      * @param reportService     сервис для работы с отчетами
-     * @param botUsername       имя бота, полученное из настроек
-     * @param botToken          токен бота, полученный из настроек
+     * @param botToken
      */
-    public TelegramBotService(DefaultBotOptions options, UserRepository userRepository,
+    public TelegramBotService(DefaultBotOptions options,
+
+                              UserRepository userRepository,
                               ShelterRepository shelterRepository,
                               AnimalRepository animalRepository,
                               UserStateService userStateService,
-                              ReportService reportService, String botUsername, String botToken) {
+                              ReportService reportService,
+                              ShelterConsultService shelterConsultService,
+                              AdoptionConsultService adoptionConsultService, String botToken, String botUsername) {
         this.userRepository = userRepository;
         this.shelterRepository = shelterRepository;
         this.animalRepository = animalRepository;
         this.userStateService = userStateService;
         this.reportService = reportService;
+        this.shelterConsultService = shelterConsultService;
+        this.adoptionConsultService = adoptionConsultService;
+        this.botToken = botToken;
+        this.botUsername = botUsername;
     }
+
 
     /**
      * Инициализация бота после создания бина.
@@ -90,6 +97,7 @@ public class TelegramBotService implements UpdatesListener {
     @PostConstruct
     public void init() {
         telegramBot = new TelegramBot(botToken);
+        messageService = new MessageService(telegramBot);
         telegramBot.setUpdatesListener(this);
         logger.info("Telegram Bot initialized. Bot username: {}", botUsername);
     }
@@ -169,11 +177,17 @@ public class TelegramBotService implements UpdatesListener {
             userStateService.clearStage(chatId);
 
             switch (command) {
-                case INFO_SHELTER:
-                    handleStage1(user, chatId);
+                case INFO_SHELTER_DOG:
+                    shelterConsultService.handleShelterInfo(chatId, "dog");
                     break;
-                case HOW_TO_ADOPT:
-                    handleStage2(user, chatId);
+                case INFO_SHELTER_CAT:
+                    shelterConsultService.handleShelterInfo(chatId, "cat");
+                    break;
+                case HOW_TO_ADOPT_DOG:
+                    adoptionConsultService.handleAdoptionConsultation(chatId, "dog");
+                    break;
+                case HOW_TO_ADOPT_CAT:
+                    adoptionConsultService.handleAdoptionConsultation(chatId, "cat");
                     break;
                 case SEND_REPORT:
                     sendTextMessage(chatId, "Пришлите, пожалуйста, фото питомца.");
@@ -186,7 +200,7 @@ public class TelegramBotService implements UpdatesListener {
                     handleCallVolunteer(user, chatId);
                     break;
                 default:
-                    sendTextMessage(chatId, "Неверная команда. Выберите вариант из меню.");
+                    messageService.sendTextMessage(chatId, "Неверная команда. Выберите вариант из меню.");
                     break;
             }
         }
@@ -205,7 +219,7 @@ public class TelegramBotService implements UpdatesListener {
                 User user = optionalUser.get();
                 user.setPhone(messageText);
                 userRepository.save(user);
-                sendTextMessage(chatId, "Ваш номер телефона принят.");
+                messageService.sendTextMessage(chatId, "Ваш номер телефона принят.");
                 userStateService.clearStage(chatId);
                 sendMainMenu(chatId);
             }
@@ -233,14 +247,14 @@ public class TelegramBotService implements UpdatesListener {
      */
     private void processReportPhoto(String chatId, Update update) {
         Optional<User> optionalUser = userRepository.findByChatId(chatId);
-        if (!optionalUser.isPresent()) {
-            sendTextMessage(chatId, "Ошибка: пользователь не найден.");
+        if (!optionalUser.isEmpty()) {
+            messageService.sendTextMessage(chatId, "Ошибка: пользователь не найден.");
             return;
         }
         User user = optionalUser.get();
         DailyReport report = reportService.getLatestReportForUser(user);
         if (report == null) {
-            sendTextMessage(chatId, "Ошибка: предварительный отчёт не найден.");
+            messageService.sendTextMessage(chatId, "Ошибка: предварительный отчёт не найден.");
             return;
         }
         List<PhotoSize> photos = List.of(update.message().photo());
@@ -252,7 +266,7 @@ public class TelegramBotService implements UpdatesListener {
             report.setPhotoPath(fileId);
             report.setHasPhoto(true);
             reportService.saveReport(report);
-            sendTextMessage(chatId, "Фото получено. Теперь пришлите, пожалуйста, текст отчёта.");
+            messageService.sendTextMessage(chatId, "Фото получено. Теперь пришлите, пожалуйста, текст отчёта.");
             userStateService.setStage(chatId, UserStage.AWAIT_REPORT_TEXT);
         } else {
             sendTextMessage(chatId, "Не удалось извлечь фото. Попробуйте отправить снова.");
@@ -267,8 +281,8 @@ public class TelegramBotService implements UpdatesListener {
      */
     private void processReportText(String chatId, String messageText) {
         Optional<User> optionalUser = userRepository.findByChatId(chatId);
-        if (!optionalUser.isPresent()) {
-            sendTextMessage(chatId, "Ошибка: пользователь не найден.");
+        if (!optionalUser.isEmpty()) {
+            messageService.sendTextMessage(chatId, "Ошибка: пользователь не найден.");
             return;
         }
         User user = optionalUser.get();
@@ -280,7 +294,7 @@ public class TelegramBotService implements UpdatesListener {
         report.setTextReport(messageText);
         report.setHasText(true);
         reportService.saveReport(report);
-        sendTextMessage(chatId, "Отчёт получен. Спасибо!");
+        messageService.sendTextMessage(chatId, "Отчёт получен. Спасибо!");
         userStateService.clearStage(chatId);
         sendMainMenu(chatId);
     }
@@ -295,7 +309,7 @@ public class TelegramBotService implements UpdatesListener {
         String welcomeText = (user.getName() == null)
                 ? "Привет! Я бот-помощник для приютов. Вы можете получить информацию о приюте, узнать, как взять животное, прислать отчёт или вызвать волонтёра.\nПожалуйста, пришлите номер телефона в формате: +7-9XX-XXX-XXXX-X"
                 : "С возвращением! Выберите интересующий вас раздел.";
-        sendTextMessage(chatId, welcomeText);
+        messageService.sendTextMessage(chatId, welcomeText);
         if (user.getPhone() == null) {
             userStateService.setStage(chatId, UserStage.AWAIT_PHONE);
         }
@@ -308,72 +322,72 @@ public class TelegramBotService implements UpdatesListener {
      * @param user   объект пользователя
      * @param chatId идентификатор чата
      */
-    private void handleStage1(User user, String chatId) {
-        Optional<Shelter> shelterOpt = shelterRepository.findAll().stream().findFirst();
-        if (!shelterOpt.isPresent()) {
-            sendTextMessage(chatId, "Информация о приюте отсутствует. Обратитесь к волонтёру.");
-            return;
-        }
-        Shelter shelter = shelterOpt.get();
-        String info = String.format(
-                "Информация о приюте \"%s\":\nАдрес: %s\nРежим работы: %s\nКонтакты охраны: %s\n\nРекомендации по технике безопасности:\n- Соблюдайте правила пропуска\n- На территории приюта запрещено шуметь\n- Следуйте инструкциям персонала",
-                shelter.getName(), shelter.getAddress(), shelter.getWorkingHours(), shelter.getContacts()
-        );
-        sendTextMessage(chatId, info);
-        if (shelter.getMapUrl() != null && !shelter.getMapUrl().isEmpty()) {
-            try {
-                SendPhoto photoMessage = new SendPhoto(chatId, shelter.getMapUrl())
-                        .caption("Схема проезда к приюту");
-                telegramBot.execute(photoMessage);
-            } catch (Exception e) {
-                logger.error("Ошибка отправки схемы проезда: ", e);
-            }
-        }
-        sendTextMessage(chatId, "Если у вас возникли вопросы, вы можете оставить контакт для связи.");
-        sendMainMenu(chatId);
-    }
+//    private void handleStage1(User user, String chatId) {
+//        Optional<Shelter> shelterOpt = shelterRepository.findAll().stream().findFirst();
+//        if (!shelterOpt.isPresent()) {
+//            sendTextMessage(chatId, "Информация о приюте отсутствует. Обратитесь к волонтёру.");
+//            return;
+//        }
+//        Shelter shelter = shelterOpt.get();
+//        String info = String.format(
+//                "Информация о приюте \"%s\":\nАдрес: %s\nРежим работы: %s\nКонтакты охраны: %s\n\nРекомендации по технике безопасности:\n- Соблюдайте правила пропуска\n- На территории приюта запрещено шуметь\n- Следуйте инструкциям персонала",
+//                shelter.getName(), shelter.getAddress(), shelter.getWorkingHours(), shelter.getContacts()
+//        );
+//        sendTextMessage(chatId, info);
+//        if (shelter.getMapUrl() != null && !shelter.getMapUrl().isEmpty()) {
+//            try {
+//                SendPhoto photoMessage = new SendPhoto(chatId, shelter.getMapUrl())
+//                        .caption("Схема проезда к приюту");
+//                telegramBot.execute(photoMessage);
+//            } catch (Exception e) {
+//                logger.error("Ошибка отправки схемы проезда: ", e);
+//            }
+//        }
+//        sendTextMessage(chatId, "Если у вас возникли вопросы, вы можете оставить контакт для связи.");
+//        sendMainMenu(chatId);
+//    }
 
-    /**
-     * Обрабатывает этап 2 – консультацию для потенциального хозяина.
-     *
-     * @param user   объект пользователя
-     * @param chatId идентификатор чата
-     */
-    private void handleStage2(User user, String chatId) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Как взять животное из приюта:\n")
-                .append("1. Ознакомьтесь со списком животных для усыновления:\n");
-        Optional<Shelter> shelterOpt = shelterRepository.findAll().stream().findFirst();
-        if (shelterOpt.isPresent()) {
-            List<Animal> animals = animalRepository.findByShelterId(shelterOpt.get().getId());
-            if (animals.isEmpty()) {
-                sb.append("В данный момент животных нет.\n");
-            } else {
-                String animalList = animals.stream()
-                        .map(a -> String.format("- %s (%s, %d лет)", a.getName(), a.getType(), a.getAge()))
-                        .collect(Collectors.joining("\n"));
-                sb.append(animalList).append("\n");
-            }
-        }
-        sb.append("2. Правила знакомства с животным:\n")
-                .append("- Встреча происходит в специально отведённом месте приюта\n")
-                .append("- Соблюдайте тишину и спокойствие\n")
-                .append("3. Необходимые документы:\n")
-                .append("- Паспорт, СНИЛС, ИНН, справка о месте жительства\n")
-                .append("4. Рекомендации по транспортировке и обустройству дома:\n")
-                .append("- Используйте специальный переносной контейнер\n")
-                .append("- Подготовьте безопасное место для животного\n")
-                .append("5. Советы кинолога:\n")
-                .append("- При первой встрече с собакой сохраняйте спокойствие и уверенность\n")
-                .append("- Дайте животному время адаптироваться\n")
-                .append("6. Возможные причины отказа:\n")
-                .append("- Несоответствие условий проживания\n")
-                .append("- Неполный пакет документов\n")
-                .append("- Недостаточная подготовка к уходу за животным\n")
-                .append("Если у вас остались вопросы, вы можете вызвать волонтёра для консультации.");
-        sendTextMessage(chatId, sb.toString());
-        sendMainMenu(chatId);
-    }
+//    /**
+//     * Обрабатывает этап 2 – консультацию для потенциального хозяина.
+//     *
+//     * @param user   объект пользователя
+//     * @param chatId идентификатор чата
+//     */
+//    private void handleStage2(User user, String chatId) {
+//        StringBuilder sb = new StringBuilder();
+//        sb.append("Как взять животное из приюта:\n")
+//                .append("1. Ознакомьтесь со списком животных для усыновления:\n");
+//        Optional<Shelter> shelterOpt = shelterRepository.findAll().stream().findFirst();
+//        if (shelterOpt.isPresent()) {
+//            List<Animal> animals = animalRepository.findByShelterId(shelterOpt.get().getId());
+//            if (animals.isEmpty()) {
+//                sb.append("В данный момент животных нет.\n");
+//            } else {
+//                String animalList = animals.stream()
+//                        .map(a -> String.format("- %s (%s, %d лет)", a.getName(), a.getType(), a.getAge()))
+//                        .collect(Collectors.joining("\n"));
+//                sb.append(animalList).append("\n");
+//            }
+//        }
+//        sb.append("2. Правила знакомства с животным:\n")
+//                .append("- Встреча происходит в специально отведённом месте приюта\n")
+//                .append("- Соблюдайте тишину и спокойствие\n")
+//                .append("3. Необходимые документы:\n")
+//                .append("- Паспорт, СНИЛС, ИНН, справка о месте жительства\n")
+//                .append("4. Рекомендации по транспортировке и обустройству дома:\n")
+//                .append("- Используйте специальный переносной контейнер\n")
+//                .append("- Подготовьте безопасное место для животного\n")
+//                .append("5. Советы кинолога:\n")
+//                .append("- При первой встрече с собакой сохраняйте спокойствие и уверенность\n")
+//                .append("- Дайте животному время адаптироваться\n")
+//                .append("6. Возможные причины отказа:\n")
+//                .append("- Несоответствие условий проживания\n")
+//                .append("- Неполный пакет документов\n")
+//                .append("- Недостаточная подготовка к уходу за животным\n")
+//                .append("Если у вас остались вопросы, вы можете вызвать волонтёра для консультации.");
+//        sendTextMessage(chatId, sb.toString());
+//        sendMainMenu(chatId);
+//    }
 
     /**
      * Обрабатывает вызов волонтёра.
@@ -384,7 +398,7 @@ public class TelegramBotService implements UpdatesListener {
     private void handleCallVolunteer(User user, String chatId) {
         sendTextMessage(chatId, "Пожалуйста, подождите, мы свяжемся с волонтёром (" + volunteerChatId + ").");
         logger.info("Пользователь с chatId {} вызвал волонтёра.", chatId);
-        sendDirectMessage(volunteerChatId, "Пользователь с chatId " + chatId + " нуждается в помощи.");
+        messageService.sendTextMessage(volunteerChatId, "Пользователь с chatId " + chatId + " нуждается в помощи.");
     }
 
     /**

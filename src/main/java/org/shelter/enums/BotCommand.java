@@ -8,8 +8,11 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
  * Перечисление команд бота с генерацией соответствующих кнопок.
  */
 public enum BotCommand {
-    INFO_SHELTER("INFO_SHELTER", "Узнать информацию о приюте"),
-    HOW_TO_ADOPT("HOW_TO_ADOPT", "Как взять животное из приюта"),
+    INFO_SHELTER_DOG("INFO_SHELTER_DOG", "Узнать информацию о приюте для собак"),
+    INFO_SHELTER_CAT("INFO_SHELTER_CAT", "Узнать информацию о приюте для кошек"),
+    HOW_TO_ADOPT_DOG("HOW_TO_ADOPT_DOG", "Как взять собаку из приюта"),
+    HOW_TO_ADOPT_CAT("HOW_TO_ADOPT_CAT", "Как взять кошку из приюта"),
+
     SEND_REPORT("SEND_REPORT", "Прислать отчёт о питомце"),
     CALL_VOLUNTEER("CALL_VOLUNTEER", "Позвать волонтёра"),
     ADOPTION_DASHBOARD("ADOPTION_DASHBOARD", "Панель усыновлений"),

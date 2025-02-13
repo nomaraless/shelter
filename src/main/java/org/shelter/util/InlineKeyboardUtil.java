@@ -13,18 +13,24 @@ public class InlineKeyboardUtil {
      * Главное меню для обычного пользователя.
      */
     public static InlineKeyboardMarkup getMainMenuKeyboard() {
-        InlineKeyboardButton infoShelterButton = new InlineKeyboardButton("Узнать информацию о приюте")
-                .callbackData(BotCommand.INFO_SHELTER.getCallbackData());
-        InlineKeyboardButton howToAdoptButton = new InlineKeyboardButton("Как взять животное из приюта")
-                .callbackData(BotCommand.HOW_TO_ADOPT.getCallbackData());
+        InlineKeyboardButton btnDogInfo = new InlineKeyboardButton("Информация о собаках")
+                .callbackData(BotCommand.INFO_SHELTER_DOG.getCallbackData());
+        InlineKeyboardButton btnCatInfo = new InlineKeyboardButton("Информация о кошках")
+                .callbackData(BotCommand.INFO_SHELTER_CAT.getCallbackData());
+        InlineKeyboardButton howToAdoptCatButton = new InlineKeyboardButton("Как взять кошку из приюта")
+                .callbackData(BotCommand.HOW_TO_ADOPT_CAT.getCallbackData());
+        InlineKeyboardButton howToAdoptDogButton = new InlineKeyboardButton("Как взять собаку из приюта")
+                .callbackData(BotCommand.HOW_TO_ADOPT_DOG.getCallbackData());
         InlineKeyboardButton sendReportButton = new InlineKeyboardButton("Прислать отчёт о питомце")
                 .callbackData(BotCommand.SEND_REPORT.getCallbackData());
         InlineKeyboardButton callVolunteerButton = new InlineKeyboardButton("Позвать волонтёра")
                 .callbackData(BotCommand.CALL_VOLUNTEER.getCallbackData());
 
         return new InlineKeyboardMarkup(
-                new InlineKeyboardButton[]{ infoShelterButton },
-                new InlineKeyboardButton[]{ howToAdoptButton },
+                new InlineKeyboardButton[]{ btnCatInfo},
+                new InlineKeyboardButton[]{ btnDogInfo},
+                new InlineKeyboardButton[]{ howToAdoptCatButton },
+                new InlineKeyboardButton[]{ howToAdoptDogButton },
                 new InlineKeyboardButton[]{ sendReportButton },
                 new InlineKeyboardButton[]{ callVolunteerButton }
         );

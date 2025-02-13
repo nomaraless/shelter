@@ -1,11 +1,10 @@
 package org.shelter.config;
 
+import com.pengrad.telegrambot.TelegramBot;
 import org.shelter.repository.AnimalRepository;
 import org.shelter.repository.ShelterRepository;
 import org.shelter.repository.UserRepository;
-import org.shelter.service.ReportService;
-import org.shelter.service.TelegramBotService;
-import org.shelter.service.UserStateService;
+import org.shelter.service.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -37,6 +36,8 @@ public class TelegramBotConfig {
     @Autowired
     private ReportService reportService;
 
+    private ShelterConsultService shelterConsultService;
+    private AdoptionConsultService adoptionConsultService;
     @Bean
     public TelegramBotService telegramBotService() {
         DefaultBotOptions options = new DefaultBotOptions();
@@ -47,8 +48,15 @@ public class TelegramBotConfig {
                 animalRepository,
                 userStateService,
                 reportService,
+                shelterConsultService,
+                adoptionConsultService,
                 botUsername,
                 botToken
         );
+    }
+
+    @Bean
+    public TelegramBot telegramBot() {
+        return new TelegramBot(botToken);
     }
 }

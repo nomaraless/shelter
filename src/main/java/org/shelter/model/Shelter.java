@@ -13,6 +13,8 @@ public class Shelter {
     // Название приюта
     @Column(name = "name", nullable = false)
     private String name;
+    @Column(name = "type")
+    private String type;
 
     // Адрес, расписание, контакты
     @Column(name = "address")
